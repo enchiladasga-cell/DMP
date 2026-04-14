@@ -1,7 +1,7 @@
 {
   "name": "dungeon-master-bot",
   "version": "3.0.0",
-  "description": "Bot Discord Dungeon Master con reglas D&D 5e",
+  "description": "Bot de Discord Dungeon Master con reglas D&D 5e",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
