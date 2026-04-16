@@ -1,14 +1,14 @@
 {
   "name": "dungeon-master-bot",
-  "version": "4.0.0",
-  "description": "Bot Discord Dungeon Master con reglas D&D 5e",
+  "version": "5.0.0",
+  "description": "Bot Discord Dungeon Master D&D 5e con Gemini 2.5 Flash",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.0.0",
-    "@anthropic-ai/sdk": "^0.20.0",
+    "@google/generative-ai": "^0.21.0",
     "mongoose": "^8.0.0"
   },
   "engines": {
