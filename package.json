@@ -1,13 +1,13 @@
 {
-  "name": "dungeon-master-bot",
-  "version": "5.0.0",
-  "description": "Bot Discord Dungeon Master D&D 5e con Gemini 2.5 Flash",
+  "name": "dungeon-master-bot-v5-5",
+  "version": "5.5.0",
+  "description": "Bot D&D Pro con Agonía, Menú de Botones y Crónicas",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.0.0",
+    "discord.js": "^14.14.1",
     "@google/generative-ai": "^0.21.0",
     "mongoose": "^8.0.0"
   },
