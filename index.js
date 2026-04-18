@@ -10,22 +10,22 @@ const {
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const mongoose = require("mongoose");
 
-// --- CONFIGURACIÓN ---
+// --- CONFIGURACIÓN DE ENTORNO ---
 const DISCORD_TOKEN  = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI    = process.env.MONGODB_URI;
 const DM_CHANNEL_NAME = "dungeon-master";
 
-// --- IA (GEMINI 2.0 FLASH - MODO GUÍA) ---
+// --- CONFIGURACIÓN IA (Modo Guía Activa) ---
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const geminiModel = genAI.getGenerativeModel({ 
     model: "gemini-2.0-flash",
-    systemInstruction: `Eres un Dungeon Master experto de D&D 5e. 
-    Tu misión es GUIAR a un GRUPO de jugadores. 
-    1. Narra de forma épica, breve y envolvente. 
-    2. Al final de cada mensaje, ofrece siempre 3 OPCIONES numeradas para que el grupo decida.
-    3. Si hay varios jugadores, interactúa con todos y crea situaciones donde deban colaborar.
-    4. Tú controlas el mundo, los monstruos y el clima. Lanza eventos inesperados.`
+    systemInstruction: `Eres un Dungeon Master de D&D 5e experto y proactivo. 
+    Tu misión es GUIAR la historia:
+    1. Narra de forma inmersiva, sensorial y breve (máximo 2 párrafos).
+    2. No esperes a que el jugador pregunte "qué hay aquí". Tú describe el entorno, los ruidos y las amenazas.
+    3. OBLIGATORIO: Termina CADA mensaje con una pregunta directa y 3 opciones numeradas (1, 2, 3) que representen caminos o acciones distintas.
+    4. Si hay varios jugadores, integra sus acciones en una sola narrativa coherente.`
 });
 
 // --- BASE DE DATOS ---
@@ -37,38 +37,33 @@ const PersonajeSchema = new mongoose.Schema({
   hp: { type: Number, required: true },
   hpMax: { type: Number, required: true },
   oro: { type: Number, default: 50 },
-  inventario: { type: [String], default: ["Equipo básico"] },
-  inspiracion: { type: Boolean, default: false }
+  inventario: { type: [String], default: ["Ropas comunes"] }
 });
 const Personaje = mongoose.model("Personaje", PersonajeSchema);
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
+  intents: [
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages, 
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-// Helper: Barra de Vida
-function getBarra(actual, max) {
-    const p = Math.max(0, Math.min(1, actual / max));
-    const b = Math.round(p * 10);
-    const c = p > 0.5 ? "🟩" : (p > 0.2 ? "🟧" : "🟥");
-    return `${c.repeat(b)}${"⬛".repeat(10 - b)} ${Math.round(p * 100)}%`;
-}
-
-// Función para llamar a la IA con contexto de grupo
-async function askDM(texto, usuario, contextoGrupo) {
+// Función Maestra de Narrativa
+async function narrarEscena(texto, nombre, clase, hp) {
     try {
-        const prompt = `Integrantes del grupo actualmente: ${contextoGrupo}. El jugador ${usuario} dice: ${texto}. Continúa la historia de forma emocionante y termina dando 3 opciones numeradas claras.`;
+        const prompt = `[Personaje: ${nombre}, Clase: ${clase}, HP: ${hp}]. El jugador dice/hace: "${texto}". Genera la continuación de la historia y ofrece 3 opciones de acción numeradas.`;
         const result = await geminiModel.generateContent(prompt);
         return result.response.text();
     } catch (err) {
-        console.error("Error en IA:", err);
-        return "*(Las nieblas del destino bloquean la visión del DM... intenta de nuevo)*";
+        console.error("Error IA:", err);
+        return "*(Las nieblas del destino ocultan el camino... intenta de nuevo)*";
     }
 }
 
-client.once(Events.ClientReady, () => {
-  console.log(`⚔️ DM Multijugador v6.0.0 listo: ${client.user.tag}`);
-  mongoose.connect(MONGODB_URI).then(() => console.log("🔗 DB Conectada"));
+client.once(Events.ClientReady, (c) => {
+  console.log(`⚔️ DM Master v6.0 (Narrativa Automática) listo: ${c.user.tag}`);
+  mongoose.connect(MONGODB_URI).then(() => console.log("🔗 MongoDB Conectada"));
 });
 
 client.on(Events.MessageCreate, async (message) => {
@@ -77,87 +72,44 @@ client.on(Events.MessageCreate, async (message) => {
   const args = content.split(/\s+/);
   const command = args[0].toLowerCase();
 
-  // COMANDO !GRUPO
-  if (command === "!grupo") {
-    const miembros = await Personaje.find({ guildId: message.guild.id });
-    if (miembros.length === 0) return message.reply("No hay aventureros en este grupo aún.");
-
-    const embed = new EmbedBuilder()
-      .setTitle("🛡️ Compañía de Aventureros")
-      .setDescription("Estado actual del grupo:")
-      .setColor(0x34495E);
-    
-    miembros.forEach(m => {
-        embed.addFields({ name: m.nombre, value: `${m.clase} | Vida: ${getBarra(m.hp, m.hpMax)} | 💰 ${m.oro}g`, inline: false });
-    });
-
-    return message.reply({ embeds: [embed] });
+  // COMANDO !INICIO
+  if (command === "!inicio") {
+    return message.reply("🛡️ **La mesa está lista.** Usa `!unirse Nombre Clase` para que el DM comience a narrar tu historia.");
   }
 
-  // COMANDO !UNIRSE
+  // !unirse REPARADO CON DISPARO DE HISTORIA
   if (command === "!unirse") {
-    const nombre = args[1]; const clase = args[2];
-    if (!nombre || !clase) return message.reply("❌ Formato: \`!unirse Nombre Clase\` (Ej: \`!unirse Knazto Guerrero\`) ");
-    
+    const nombre = args[1];
+    const clase = args[2];
+    if (!nombre || !clase) return message.reply("❌ Uso: `!unirse Nombre Clase` (Ej: `!unirse Knazto Guerrero`) ");
+
     const hpBase = { "guerrero": 12, "mago": 6, "picaro": 8, "clerigo": 10 };
     const vida = hpBase[clase.toLowerCase()] || 10;
 
-    await Personaje.findOneAndUpdate(
-        { discordId: message.author.id, guildId: message.guild.id },
-        { nombre, clase, hp: vida, hpMax: vida, oro: 50 },
-        { upsert: true }
-    );
-    return message.reply(`✅ **${nombre}** se ha unido a la partida como **${clase}**. ¡Escribe algo para que el DM comience la narración!`);
+    try {
+        const p = await Personaje.findOneAndUpdate(
+            { discordId: message.author.id, guildId: message.guild.id },
+            { nombre, clase, hp: vida, hpMax: vida, oro: 50 },
+            { upsert: true, new: true }
+        );
+
+        await message.channel.sendTyping();
+        const intro = await narrarEscena("Empieza mi aventura en un lugar desconocido y peligroso.", p.nombre, p.clase, p.hp);
+        
+        return message.reply(`✅ **Ficha creada para ${p.nombre} el ${p.clase}.**\n\n${intro}`);
+    } catch (e) {
+        return message.reply("❌ Error al conectar con la base de datos.");
+    }
   }
 
-  // COMANDO !MENU
-  if (command === "!menu") {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("btn_perfil").setLabel("👤 Mi Ficha").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("btn_descanso").setLabel("🏕️ Descansar").setStyle(ButtonStyle.Success)
-    );
-    return message.reply({ content: "Gestión de aventura:", components: [row] });
-  }
-
-  // NARRACIÓN IA (SOPORTE MULTIJUGADOR)
+  // NARRACIÓN FLUIDA (IA RESPONDE SIEMPRE)
   if (!content.startsWith("!")) {
+    const p = await Personaje.findOne({ discordId: message.author.id });
+    if (!p) return message.reply("⚠️ Debes unirte primero con `!unirse Nombre Clase`.");
+
     await message.channel.sendTyping();
-    const grupo = await Personaje.find({ guildId: message.guild.id });
-    const contexto = grupo.length > 0 ? grupo.map(m => `${m.nombre} (${m.clase})`).join(", ") : "Jugador solitario";
-    
-    const r = await askDM(content, message.author.username, contexto);
-    return message.reply(r);
-  }
-});
-
-// GESTOR DE BOTONES
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isButton()) return;
-  if (interaction.replied || interaction.deferred) return;
-
-  try {
-    const p = await Personaje.findOne({ discordId: interaction.user.id });
-    if (!p) return await interaction.reply({ content: "Primero crea tu personaje con `!unirse`.", ephemeral: true });
-
-    if (interaction.customId === "btn_perfil") {
-      const embed = new EmbedBuilder()
-        .setTitle(`📜 Ficha: ${p.nombre}`)
-        .addFields(
-          { name: "Clase", value: p.clase, inline: true },
-          { name: "Vida", value: getBarra(p.hp, p.hpMax) },
-          { name: "Oro", value: `💰 ${p.oro}g`, inline: true }
-        )
-        .setColor(0x2ECC71);
-      return await interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-
-    if (interaction.customId === "btn_descanso") {
-      p.hp = p.hpMax;
-      await p.save();
-      return await interaction.reply({ content: "Has acampado y recuperado tus fuerzas (HP al máximo).", ephemeral: true });
-    }
-  } catch (err) {
-    console.error(err);
+    const respuesta = await narrarEscena(content, p.nombre, p.clase, p.hp);
+    return message.reply(respuesta);
   }
 });
 
