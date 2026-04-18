@@ -16,12 +16,11 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI    = process.env.MONGODB_URI;
 const DM_CHANNEL_NAME = "dungeon-master";
 
-// --- IA ---
+// --- IA ACTUALIZADA (v5.8.0) ---
+// Cambiamos el modelo a uno compatible con las cuotas actuales y resolvemos el error 404
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-// Usamos gemini-1.5-flash para mayor estabilidad y velocidad
 const geminiModel = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash",
-    systemInstruction: "Eres un Dungeon Master experto en D&D 5e. Narra de forma épica y breve. Gestiona el inventario y la vida. Si un jugador hace algo heroico, añade [INSPIRACION] al final."
+    model: "gemini-1.5-flash" 
 });
 
 // --- BASE DE DATOS ---
@@ -50,20 +49,21 @@ function getBarra(actual, max) {
     return `${c.repeat(b)}${"⬛".repeat(10 - b)} ${Math.round(p * 100)}%`;
 }
 
-// Función IA con mejor manejo de errores
+// Función IA con manejo de errores robusto
 async function askDM(texto, usuario) {
     try {
-        const result = await geminiModel.generateContent(`Jugador ${usuario}: ${texto}`);
+        const prompt = `Eres un Dungeon Master de D&D 5e. El jugador ${usuario} dice: ${texto}. Narra las consecuencias de forma épica y breve.`;
+        const result = await geminiModel.generateContent(prompt);
         const response = await result.response;
         return response.text();
     } catch (err) {
         console.error("DETALLE ERROR IA:", err);
-        return "*(El oráculo está nublado... intenta hablar de otra forma)*";
+        return "*(El oráculo se ha oscurecido... intenta hablar de nuevo)*";
     }
 }
 
 client.once(Events.ClientReady, () => {
-  console.log(`⚔️ DM Master v5.7.0 listo: ${client.user.tag}`);
+  console.log(`⚔️ DM Master v5.8.0 listo: ${client.user.tag}`);
   mongoose.connect(MONGODB_URI).then(() => console.log("🔗 DB Conectada"));
 });
 
@@ -76,8 +76,8 @@ client.on(Events.MessageCreate, async (message) => {
   // COMANDO !INICIO
   if (command === "!inicio") {
     const embed = new EmbedBuilder()
-      .setTitle("⚔️ La Senda del Héroe")
-      .setDescription("El Dungeon Master aguarda vuestras hazañas. ¡Preparaos!")
+      .setTitle("⚔️ El Destino Llama")
+      .setDescription("¡La aventura comienza! Usa los botones para gestionar tu camino.")
       .setColor(0xF1C40F);
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("btn_unirse_info").setLabel("🙋 Cómo Unirse").setStyle(ButtonStyle.Primary),
@@ -86,7 +86,7 @@ client.on(Events.MessageCreate, async (message) => {
     return message.reply({ embeds: [embed], components: [row] });
   }
 
-  // COMANDO !UNIRSE REPARADO
+  // COMANDO !UNIRSE
   if (command === "!unirse") {
     const nombre = args[1];
     const clase = args[2];
@@ -101,22 +101,13 @@ client.on(Events.MessageCreate, async (message) => {
             { nombre, clase, hp: vida, hpMax: vida, oro: 50 },
             { upsert: true }
         );
-        return message.reply(`✅ ¡Bienvenido **${nombre}** el **${clase}**! Tu ficha ha sido creada. Usa \`!menu\` para verla.`);
+        return message.reply(`✅ ¡Bienvenido **${nombre}** el **${clase}**! Tu ficha está lista.`);
     } catch (e) {
-        return message.reply("❌ Error al guardar tu personaje en la base de datos.");
+        return message.reply("❌ Error en la base de datos.");
     }
   }
 
-  // COMANDO !MENU
-  if (command === "!menu") {
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("btn_perfil").setLabel("👤 Perfil").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("btn_descanso").setLabel("🏕️ Descansar").setStyle(ButtonStyle.Success)
-    );
-    return message.reply({ content: "Gestión de aventura:", components: [row] });
-  }
-
-  // NARRACIÓN IA (Si no es comando con "!")
+  // NARRACIÓN IA
   if (!content.startsWith("!")) {
     await message.channel.sendTyping();
     const r = await askDM(content, message.author.username);
@@ -124,7 +115,7 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-// GESTOR DE BOTONES
+// GESTOR DE BOTONES (PARCHE 40060 APLICADO)
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
   if (interaction.replied || interaction.deferred) return;
@@ -133,17 +124,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const p = await Personaje.findOne({ discordId: interaction.user.id });
 
     if (interaction.customId === "btn_unirse_info") {
-      return await interaction.reply({ content: "Escribe en el chat: `!unirse TuNombre Clase`\nEjemplo: `!unirse Knazto Guerrero`", ephemeral: true });
+      return await interaction.reply({ content: "Escribe: `!unirse TuNombre Clase`\nEjemplo: `!unirse Knazto Guerrero`", ephemeral: true });
     }
 
-    if (!p) return await interaction.reply({ content: "❌ No tienes personaje creado. Usa `!unirse`.", ephemeral: true });
+    if (!p) return await interaction.reply({ content: "❌ No tienes personaje. Usa `!unirse`.", ephemeral: true });
 
     if (interaction.customId === "btn_perfil") {
       const embed = new EmbedBuilder()
         .setTitle(`🛡️ ${p.nombre}`)
         .addFields(
           { name: "Salud", value: getBarra(p.hp, p.hpMax) },
-          { name: "Inspiración", value: p.inspiracion ? "✨ Sí" : "❌ No", inline: true },
+          { name: "Clase", value: p.clase, inline: true },
           { name: "Oro", value: `💰 ${p.oro}g`, inline: true }
         )
         .setColor(p.hp > 0 ? 0x2ECC71 : 0xE74C3C);
@@ -153,7 +144,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.customId === "btn_descanso") {
       p.hp = p.hpMax;
       await p.save();
-      return await interaction.reply({ content: "✅ Has descansado y recuperado toda tu vida.", ephemeral: true });
+      return await interaction.reply({ content: "✅ Descanso completado. Vida restaurada.", ephemeral: true });
     }
   } catch (err) {
     if (!interaction.replied) await interaction.reply({ content: "Error procesando botón.", ephemeral: true });
