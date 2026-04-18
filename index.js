@@ -11,20 +11,20 @@ const {
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const mongoose = require("mongoose");
 
-// --- CONFIGURACIÓN DE ENTORNO ---
+// --- CONFIGURACIÓN ---
 const DISCORD_TOKEN  = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const MONGODB_URI    = process.env.MONGODB_URI;
 const DM_CHANNEL_NAME = "dungeon-master";
 
-// --- CONFIGURACIÓN IA ---
+// --- IA ---
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const geminiModel = genAI.getGenerativeModel({ 
     model: "gemini-1.5-flash",
-    systemInstruction: "Eres un Dungeon Master experto en D&D 5e. Tu tono es épico y descriptivo. Gestionas el inventario y la vida. Si un jugador hace algo heroico, indica [INSPIRACION] al final."
+    systemInstruction: "Eres un Dungeon Master experto. Narra aventuras de D&D 5e de forma épica. Mantén el rastro de la salud y el inventario. Si alguien hace algo increíble, añade [INSPIRACION] al final."
 });
 
-// --- MODELOS DE BASE DE DATOS ---
+// --- BASE DE DATOS ---
 const PersonajeSchema = new mongoose.Schema({
   discordId: { type: String, required: true },
   guildId: { type: String, required: true },
@@ -32,118 +32,108 @@ const PersonajeSchema = new mongoose.Schema({
   clase: { type: String, required: true },
   hp: { type: Number, required: true },
   hpMax: { type: Number, required: true },
-  estado: { type: String, default: "Vivo" },
   oro: { type: Number, default: 50 },
   inventario: { type: [String], default: [] },
-  titulos: { type: [String], default: [] },
   inspiracion: { type: Boolean, default: false }
 });
-
-const MundoSchema = new mongoose.Schema({
-  guildId: { type: String, required: true, unique: true },
-  cronicas: { type: [String], default: [] }
-});
-
 const Personaje = mongoose.model("Personaje", PersonajeSchema);
-const Mundo = mongoose.model("Mundo", MundoSchema);
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds, 
-    GatewayIntentBits.GuildMessages, 
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
 });
 
-// HELPER: Barra de Vida Visual
-function generarBarraVida(actual, max) {
-    if (actual <= 0) return "💀 [⬛⬛⬛⬛⬛⬛⬛⬛⬛⬛] 0%";
-    const porcentaje = Math.max(0, Math.min(1, actual / max));
-    const bloques = Math.round(porcentaje * 10);
-    const color = porcentaje > 0.5 ? "🟩" : (porcentaje > 0.2 ? "🟧" : "🟥");
-    return `${color.repeat(bloques)}${"⬛".repeat(10 - bloques)} ${Math.round(porcentaje * 100)}%`;
+// Helper: Barra de Vida
+function getBarra(actual, max) {
+    const p = Math.max(0, Math.min(1, actual / max));
+    const b = Math.round(p * 10);
+    const c = p > 0.5 ? "🟩" : (p > 0.2 ? "🟧" : "🟥");
+    return `${c.repeat(b)}${"⬛".repeat(10 - b)} ${Math.round(p * 100)}%`;
 }
 
-// FUNCIÓN PARA IA
+// Función IA
 async function askDM(texto, usuario) {
     try {
-        const prompt = `El jugador ${usuario} dice: ${texto}. Narra las consecuencias.`;
-        const result = await geminiModel.generateContent(prompt);
+        const result = await geminiModel.generateContent(`Jugador ${usuario}: ${texto}`);
         return result.response.text();
     } catch (err) {
-        console.error("Error Gemini:", err);
-        return "*(El viento aúlla y no entiendes lo que sucede... intenta de nuevo)*";
+        return "*(El destino es incierto... intenta de nuevo)*";
     }
 }
 
-client.once(Events.ClientReady, (c) => {
-  console.log(`⚔️ DM Master v5.5.0 listo como: ${c.user.tag}`);
-  mongoose.connect(MONGODB_URI).then(() => console.log("🔗 MongoDB Conectado")).catch(console.error);
+client.once(Events.ClientReady, () => {
+  console.log(`⚔️ DM Master v5.6.0 listo: ${client.user.tag}`);
+  mongoose.connect(MONGODB_URI).then(() => console.log("🔗 DB Conectada"));
 });
 
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot || message.channel.name !== DM_CHANNEL_NAME) return;
   const lower = message.content.toLowerCase();
 
-  // COMANDO INICIO
   if (lower === "!inicio") {
     const embed = new EmbedBuilder()
-      .setTitle("⚔️ La Aventura Comienza")
-      .setDescription("El Dungeon Master ha llegado. Preparaos para la gloria o la muerte.")
+      .setTitle("⚔️ Nueva Aventura")
+      .setDescription("El Dungeon Master aguarda. ¡Preparaos!")
       .setColor(0xF1C40F);
-
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("btn_unirse").setLabel("🙋 Unirse").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("btn_perfil").setLabel("👤 Perfil").setStyle(ButtonStyle.Secondary)
     );
-
     return message.reply({ embeds: [embed], components: [row] });
   }
 
-  // COMANDO MENÚ
   if (lower === "!menu") {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("btn_perfil").setLabel("👤 Mi Perfil").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("btn_descanso").setLabel("🏕️ Descansar").setStyle(ButtonStyle.Success)
     );
-    return message.reply({ content: "Panel del aventurero:", components: [row] });
+    return message.reply({ content: "Panel de control:", components: [row] });
   }
 
-  // NARRACIÓN IA
   if (!message.content.startsWith("!")) {
     await message.channel.sendTyping();
-    const respuesta = await askDM(message.content, message.author.username);
-    return message.reply(respuesta);
+    const r = await askDM(message.content, message.author.username);
+    return message.reply(r);
   }
 });
 
-// GESTOR DE BOTONES
+// GESTOR DE BOTONES (PARCHE DE SEGURIDAD 40060)
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
-  const p = await Personaje.findOne({ discordId: interaction.user.id });
+  
+  // PARCHE: Evitar responder dos veces o a interacciones caducadas
+  if (interaction.replied || interaction.deferred) return;
 
-  if (interaction.customId === "btn_unirse") {
-    return interaction.reply({ content: "Usa `!unirse Nombre Clase` (Guerrero, Mago, Picaro, Clerigo).", ephemeral: true });
-  }
+  try {
+    const p = await Personaje.findOne({ discordId: interaction.user.id });
 
-  if (!p) return interaction.reply({ content: "No tienes personaje.", ephemeral: true });
+    if (interaction.customId === "btn_unirse") {
+      return await interaction.reply({ content: "Usa `!unirse Nombre Clase` para empezar.", ephemeral: true });
+    }
 
-  if (interaction.customId === "btn_perfil") {
-    const embed = new EmbedBuilder()
-      .setTitle(`🛡️ ${p.nombre}`)
-      .addFields(
-        { name: "Salud", value: generarBarraVida(p.hp, p.hpMax) },
-        { name: "Oro", value: `💰 ${p.oro}g`, inline: true },
-        { name: "Inspiración", value: p.inspiracion ? "✨" : "❌", inline: true }
-      )
-      .setColor(p.hp > 0 ? 0x2ECC71 : 0xE74C3C);
-    await interaction.reply({ embeds: [embed], ephemeral: true });
-  }
+    if (!p) return await interaction.reply({ content: "❌ No tienes personaje.", ephemeral: true });
 
-  if (interaction.customId === "btn_descanso") {
-    p.hp = p.hpMax;
-    await p.save();
-    await interaction.reply({ content: "Has descansado por completo.", ephemeral: true });
+    if (interaction.customId === "btn_perfil") {
+      const embed = new EmbedBuilder()
+        .setTitle(`🛡️ ${p.nombre}`)
+        .addFields(
+          { name: "Salud", value: getBarra(p.hp, p.hpMax) },
+          { name: "Oro", value: `💰 ${p.oro}g`, inline: true },
+          { name: "Inspiración", value: p.inspiracion ? "✨" : "❌", inline: true }
+        )
+        .setColor(p.hp > 0 ? 0x2ECC71 : 0xE74C3C);
+      return await interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    if (interaction.customId === "btn_descanso") {
+      p.hp = p.hpMax;
+      await p.save();
+      return await interaction.reply({ content: "✅ Has descansado por completo.", ephemeral: true });
+    }
+  } catch (err) {
+    console.error(err);
+    if (!interaction.replied) {
+      await interaction.reply({ content: "Error procesando botón.", ephemeral: true });
+    }
   }
 });
 
