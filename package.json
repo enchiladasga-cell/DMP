@@ -1,7 +1,7 @@
 {
-  "name": "dungeon-master-bot-v5-5",
+  "name": "dungeon-master-bot",
   "version": "5.5.0",
-  "description": "Bot D&D Pro con Agonía, Menú de Botones y Crónicas",
+  "description": "Bot D&D Pro con Gemini 1.5 Flash y MongoDB",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
