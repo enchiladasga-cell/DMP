@@ -14,25 +14,20 @@ const client = new Client({
 });
 
 client.commands = new Collection();
+client.tempAdventures = {}; // Mazmorras generadas en memoria
 
-// Cargar comandos (excluir deploy.js)
 const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath)
-  .filter(f => f.endsWith('.js') && f !== 'deploy.js');
-
+const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js') && f !== 'deploy.js');
 for (const file of commandFiles) {
   const command = require(path.join(commandsPath, file));
-  if (command.data && command.execute) {
-    client.commands.set(command.data.name, command);
-  }
+  if (command.data && command.execute) client.commands.set(command.data.name, command);
 }
 
-// Conectar a MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ MongoDB conectado'))
   .catch(err => console.error('❌ Error MongoDB:', err));
 
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`✅ Bot listo como ${client.user.tag}`);
   require('./utils/adventureSuggester')(client);
 });
@@ -45,18 +40,18 @@ client.on('interactionCreate', async interaction => {
       await command.execute(interaction, client);
     } catch (error) {
       console.error(error);
-      const msg = { content: '❌ Hubo un error ejecutando este comando.', ephemeral: true };
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(msg);
-      } else {
-        await interaction.reply(msg);
-      }
+      const msg = { content: '❌ Hubo un error ejecutando este comando.', flags: 64 };
+      if (interaction.replied || interaction.deferred) await interaction.followUp(msg);
+      else await interaction.reply(msg);
     }
   }
-
   if (interaction.isButton()) {
-    const sessionManager = require('./utils/sessionManager');
-    await sessionManager.handleButton(interaction, client);
+    try {
+      const sessionManager = require('./utils/sessionManager');
+      await sessionManager.handleButton(interaction, client);
+    } catch (error) {
+      console.error('Button error:', error);
+    }
   }
 });
 

@@ -31,9 +31,35 @@ const characterSchema = new mongoose.Schema({
   bonificadorCompetencia: { type: Number, default: 2 },
   gold: { type: Number, default: 10 },
   inventory: { type: [itemSchema], default: [] },
+
+  // NUEVO: recursos de clase
+  resources: {
+    rageTurns:     { type: Number, default: 0 },  // Barbaro
+    spellSlots:    { type: Number, default: 3 },   // Mago
+    healingUses:   { type: Number, default: 3 },   // Clerigo
+    secondWind:    { type: Boolean, default: true },// Guerrero
+    sneakReady:    { type: Boolean, default: true },// Picaro
+  },
+
+  // NUEVO: reputacion con facciones
+  reputation: {
+    gremio_aventureros: { type: Number, default: 0 },
+    reino_norte:        { type: Number, default: 0 },
+    orden_magica:       { type: Number, default: 0 },
+    ladrones:           { type: Number, default: 0 },
+    iglesia_luz:        { type: Number, default: 0 },
+  },
+
+  // NUEVO: estadisticas de arena
+  arenaWins:   { type: Number, default: 0 },
+  arenaLosses: { type: Number, default: 0 },
+
+  // NUEVO: comercio pendiente
+  tradeOffer: { type: mongoose.Schema.Types.Mixed, default: null },
+
   adventuresCompleted: { type: Number, default: 0 },
-  totalKills: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now },
+  totalKills:          { type: Number, default: 0 },
+  createdAt:           { type: Date, default: Date.now },
 });
 
 module.exports = mongoose.model('Character', characterSchema);
