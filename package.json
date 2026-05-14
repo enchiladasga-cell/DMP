@@ -1,23 +1,16 @@
 {
-  "name": "dnd-discord-bot",
-  "version": "1.0.0",
-  "description": "Bot de Dungeon Master para Discord con reglas D&D 5e simplificadas",
-  "main": "src/index.js",
+  "name": "ecos-de-eldoria",
+  "version": "2.0.0",
+  "description": "Bot Dungeon Master para Ecos de Eldoria con IA DeepSeek",
+  "main": "index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.14.1",
-    "mongoose": "^8.2.1",
-    "canvas": "^2.11.2"
-    "dotenv": "^16.4.5",
-    "node-cron": "^3.0.3"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.0"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "axios": "^1.6.7",
+    "canvas": "^2.11.2",
+    "discord.js": "^14.11.0",
+    "mongoose": "^7.0.0",
+    "node-cron": "^3.0.0"
   }
 }
