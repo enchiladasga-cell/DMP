@@ -23,7 +23,7 @@ module.exports = {
     
     const respuesta = await askDeepseek(history);
     if (respuesta) {
-      await message.reply(respuesta);
+      await message.channel.send(respuesta);
     }
   }
 };
